@@ -92,3 +92,4 @@ examples/
 
 # Built match pages (per match, published by the club where they choose)
 match_pages/
+.vercel

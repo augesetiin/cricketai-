@@ -1,9 +1,21 @@
 {
-  "version": 2,
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/fan/(.*)",
       "destination": "/api/index.py"
+    },
+    {
+      "source": "/fan",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/((?!fan/|api/).*)",
+      "destination": "/index.html"
     }
   ]
 }

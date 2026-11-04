@@ -18,7 +18,22 @@ if "VERCEL" in os.environ or not os.access(root_dir, os.W_OK):
 
 class handler(server.Handler):
     def do_GET(self):
-        # Route root path "/" directly to the Fan Companion UI
-        if self.path == "/" or self.path.startswith("/?"):
-            self.path = "/fan"
+        # Support Vercel x-matched-path or original path
+        orig_path = self.headers.get("x-matched-path") or self.headers.get("x-vercel-matched-path") or self.path
+        if orig_path.startswith("/fan/") or orig_path == "/fan":
+            self.path = orig_path
+        elif self.path in ("/", "/index.html", "/api", "/api/index.py"):
+            try:
+                html_path = os.path.join(root_dir, "fan.html")
+                with open(html_path, "r", encoding="utf-8") as f:
+                    self._html(f.read())
+                return
+            except Exception:
+                pass
         super().do_GET()
+
+    def do_POST(self):
+        orig_path = self.headers.get("x-matched-path") or self.headers.get("x-vercel-matched-path") or self.path
+        if orig_path.startswith("/fan/"):
+            self.path = orig_path
+        super().do_POST()
