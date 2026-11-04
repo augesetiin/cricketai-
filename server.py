@@ -3234,10 +3234,8 @@ def league_table_home_row(table=None):
     'win today, move up to Nth' graphic? A table fetched successfully can still be the
     WRONG table (verified in testing: an unrelated competition_id returned a different
     real league's table, not an error) — the only reliable check is whether the home
-    club's own name appears in it. Matches on the club name's first significant word
-    (e.g. 'Super' out of 'Super Kings CC'), same spirit as the
-    opposition-abbreviation logic in fetch_todays_match(), since PlayCricket's league-table
-    team names don't exactly match the state's home_team spelling."""
+    club's own name appears in it. Matches on the club name's first significant word,
+    since league-table team names do not always match the exact spelling."""
     table = table or _league_table
     rows = table.get("rows") or []
     home_name = (load_state().get("home_team") or "").strip()
@@ -3546,7 +3544,7 @@ def _pc_recent_matches(api_key, site_id, season, cfg, limit=12):
     return rows[:limit]
 
 def _card_name(name):
-    """'Royal Challengers and Kings CC' -> 'Royal Challengers & Kings CC' — shorter on the card."""
+    """Shorten 'and' to '&' for card display."""
     return re.sub(r"\s+and\s+", " & ", (name or "").strip(), flags=re.I)
 
 
@@ -6460,25 +6458,6 @@ def _pc_upload(st):
     return ("ok", note, "")
 
 
-def _installed_version():
-    """This copy's version: the newest released heading in CHANGELOG.md (works for a zip
-    download with no git, unlike quickstart's git describe)."""
-    try:
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "CHANGELOG.md"),
-                  encoding="utf-8") as f:
-            m = re.search(r"(?m)^## v(\d+(?:\.\d+)*)", f.read())
-        return m.group(1) if m else None
-    except OSError:
-        return None
-
-
-def _pc_update(st):
-    have = _installed_version()
-    if not have:
-        return ("skip", "Version check not configured.", "")
-    return ("ok", f"Up to date (v{have}).", "")
-
-
 def _pc_scorer_link(st):
     """Two-laptop setups: is the scorer's machine reachable?"""
     if st.get("pcs_source", "local") == "agent":
@@ -6514,8 +6493,7 @@ PRECHECKS = (("youtube", "YouTube", _pc_youtube),
              ("cameras", "Cameras", _pc_cameras),
              ("fixture", "Today's fixture", _pc_fixture),
              ("badge", "Opposition badge", _pc_badge),
-             ("surnames", "Player names", _pc_surnames),
-             ("update", "Software version", _pc_update))
+             ("surnames", "Player names", _pc_surnames))
 
 
 def run_precheck():

@@ -254,19 +254,6 @@ class NewCheckTests(unittest.TestCase):
         self.assertEqual(server._pc_upload(dict(ok, network_test_at=now - 30 * 86400))[0], "warn")
         self.assertEqual(server._pc_upload(dict(ok, network_test_mbps=2))[0], "bad")
 
-    def test_update_check(self):
-        def release(tag):
-            r = mock.MagicMock()
-            r.__enter__.return_value.read.return_value = json.dumps({"tag_name": tag}).encode()
-            return r
-        with mock.patch.object(server, "_installed_version", return_value="2.10"):
-            for tag, want in (("v2.11", "warn"), ("v2.10", "ok"), ("v2.9", "ok")):
-                with mock.patch.object(server.urllib.request, "urlopen", return_value=release(tag)):
-                    self.assertEqual(server._pc_update({})[0], want, tag)   # 2.10 > 2.9
-
-    def test_installed_version_reads_the_changelog(self):
-        self.assertRegex(server._installed_version() or "", r"^\d+\.\d+")
-
     def test_scorer_link(self):
         self.assertEqual(server._pc_scorer_link({})[0], "skip")
         with mock.patch.object(server, "read_agent_file", return_value=None), \
