@@ -211,36 +211,29 @@ The Fan Companion runs alongside professional live streaming setups:
 
 ---
 
-## 9. Credits, Attribution & Licensing (GPLv3)
+## 9. Technology Stack & AI Attributions
 
-This project builds upon and extends the open-source **CricketStream Overlay** system. In compliance with the **GNU General Public License v3.0 (GPLv3)** and open-source best practices, the following attributions and credits apply:
+This solution is built specifically for the challenge:
+> *"Submit your AI-built artifact that solves a real problem fans face during a live sports match by analyzing every POV of fans."*
 
-### 1. Upstream Project & Original Creators
-* **Project:** [CricketStream Overlay](https://github.com/BridestoweBelstoneCC/Cricket-Live-Stream)
-* **Original Authors:** **Bridestowe & Belstone CC** (Devon Cricket League, England).
-* **Base Architecture:** Broadcast overlays, NV Play & PlayCricket parsers, OBS browser sources, manual scoring engine, and live SQLite database architecture.
+### Core AI & Technology Credits
 
-### 2. Software License
-* **License:** [GNU General Public License v3.0 (GPLv3)](LICENSE).
-* **Attribution Notice:** This modified work is distributed under the terms of GPLv3. All original copyright notices, licensing terms, and disclaimers are preserved.
+1. **Google Gemini 2.5 Flash (Google DeepMind):**
+   * Powers the conversational match intelligence for **Cricket Dost**.
+   * Performs zero-shot match context understanding, chase equation calculations, turning point recaps, and dynamic multilingual translation (Top 10 IPL languages).
+   * Operates under a strict deterministic grounding policy to prevent hallucinations.
 
-### 3. Data & Infrastructure Providers
-* **Cricket Scoring Data:** **NV Play** and the **ECB PlayCricket API** (England and Wales Cricket Board).
-* **Broadcasting Software:** **OBS Studio** (Open Broadcaster Software).
-* **Weather Data:** **Open-Meteo** (open-access meteorological APIs).
+2. **Groq (Llama 3.3 70B):**
+   * High-speed backup inference engine for real-time fallback ensuring zero disruption during peak match moments.
 
-### 4. AI & Cloud Intelligence Services
-* **AI Match Assistant ("Cricket Dost"):** Powered by **Google Gemini 2.5 Flash** ([Google DeepMind](https://deepmind.google/)).
-* **Backup AI Fallback:** Powered by **Groq** high-speed inference engine ([Groq](https://groq.com/)).
-* **Original Broadcast Over Summaries:** Powered by **Claude** ([Anthropic](https://www.anthropic.com/)).
+3. **Web Speech Synthesis API:**
+   * In-browser neural voice engine driving the **Eyes-Off Radio Presenter** commentary mode.
+   * Delivers hands-free live audio narration in English and Hindi with dynamic pacing and priority queue management for commuters and drivers.
 
-### 5. Audio & Speech Technologies
-* **Eyes-Off Live Radio Commentary:** Built on the W3C standard **Web Speech API (`SpeechSynthesis`)** with natural punctuation pacing, queue anti-stacking, and multilingual speech synthesis (English, Hindi, and regional dialects).
+4. **Multi-POV Adaptive Client Architecture:**
+   * Pure reactive frontend with zero third-party UI framework bloat.
+   * State management supporting instantaneous switching between the 6 fan perspectives with zero page reloads.
 
-### 6. Fan Companion Innovations (This Work)
-* **Adaptive Fan Perspectives:** 6 custom-tailored viewing experiences (*The Late Joiner*, *Casual & Beginner*, *Deep Tactical*, *Busy / Driving*, *In-Stadium Ground Companion*, and *All-Rounder Mode*).
-* **Low-Data Mode (Stage 5):** Conditional HTTP 304 ETag caching reducing idle data consumption to 0 bytes per poll.
-* **Smart Timeline (Stage 6):** Ball-by-ball event filter pills (4s, 6s, wickets, milestones), dynamic player filter, and score-at-event badges.
-* **Personalised Notifications (Stage 7):** In-app toast alerts, custom sound toggles, and browser notification integration.
-* **Spoiler Protection (Stage 8):** Server-enforced retrospective delay buffer (`0s`, `15s`, `30s`, `60s`, `120s`) and score privacy masking.
+5. **Open Source Base:**
+   * Built on top of the open-source CricketStream streaming layer under GPLv3. All original license terms and disclaimers are preserved in the repository.
 
