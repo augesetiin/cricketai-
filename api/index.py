@@ -17,23 +17,28 @@ if "VERCEL" in os.environ or not os.access(root_dir, os.W_OK):
         pass
 
 class handler(server.Handler):
+    def _normalize_path(self):
+        # Read the real incoming URL from Vercel headers if available
+        matched = (
+            self.headers.get("x-matched-path")
+            or self.headers.get("x-vercel-matched-path")
+            or self.headers.get("x-real-path")
+            or self.path
+        )
+        if matched.startswith("/api/fan/"):
+            matched = matched[4:]
+        elif matched in ("/api", "/api/"):
+            matched = "/fan/data"
+        self.path = matched
+
     def do_GET(self):
-        # Support Vercel x-matched-path or original path
-        orig_path = self.headers.get("x-matched-path") or self.headers.get("x-vercel-matched-path") or self.path
-        if orig_path.startswith("/fan/") or orig_path == "/fan":
-            self.path = orig_path
-        elif self.path in ("/", "/index.html", "/api", "/api/index.py"):
-            try:
-                html_path = os.path.join(root_dir, "fan.html")
-                with open(html_path, "r", encoding="utf-8") as f:
-                    self._html(f.read())
-                return
-            except Exception:
-                pass
+        self._normalize_path()
         super().do_GET()
 
     def do_POST(self):
-        orig_path = self.headers.get("x-matched-path") or self.headers.get("x-vercel-matched-path") or self.path
-        if orig_path.startswith("/fan/"):
-            self.path = orig_path
+        self._normalize_path()
         super().do_POST()
+
+    def do_OPTIONS(self):
+        self._normalize_path()
+        super().do_OPTIONS()
