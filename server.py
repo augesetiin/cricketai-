@@ -56,7 +56,7 @@ import urllib.request, urllib.error, html
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 import sqlite3
 import shutil
-from urllib.parse import urlparse, urlencode
+from urllib.parse import urlparse, urlencode, parse_qs
 
 # Console output throughout this file uses arrows/checkmarks (→, ✓, ✗, —). Windows consoles
 # (and anything with stdout redirected/piped, including the test suite's HTTP threads) often
@@ -1733,7 +1733,7 @@ _last_good_state = None   # cached last successful load, used if the file is mid
 # control_token/club_password can never actually reach match_state.json today (they live only
 # in config.ini's [Auth] section and _seed_state_from_config's MAPPING doesn't copy them) —
 # they're listed here anyway as a defensive backstop in case that ever changes.
-SECRET_KEYS = ("anthropic_api_key", "playcricket_api_key", "api_token",
+SECRET_KEYS = ("anthropic_api_key", "gemini_api_key", "playcricket_api_key", "api_token",
                "weather_api_key", "obs_password", "camera_rtsp_url", "camera2_rtsp_url",
                "control_token", "club_password", "youtube_stream_key",
                "pcs_bridge_token")
@@ -4012,6 +4012,7 @@ def parse_pcs_json(data):
         "last_over_runs":      gi("last_over_runs"),
         "over_history":        g("over_history"),
         "pcs_overs":           overs,
+        "max_overs":           gi("max_overs", 0) or None,
         # Template's own field when mapped; else compute from target (these two keys used to
         # appear TWICE in this literal, silently discarding a computed-from-target value)
         "runsRequired":        gi("runs_required", 0) or (max(0, target - runs) if target else 0),
@@ -7552,13 +7553,18 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
 
-    def _json(self, data, status=200):
+    def _json(self, data, status=200, no_cache=False, extra_headers=None):
         try:
             body = json.dumps(data).encode()
             self.send_response(status)
             self.send_header("Content-Type","application/json")
             self.send_header("Content-Length",str(len(body)))
             self._security_headers()
+            if no_cache:
+                self.send_header("Cache-Control", "no-store")
+            if extra_headers:
+                for k, v in extra_headers.items():
+                    self.send_header(k, str(v))
             # 2.2: mutating (POST) responses are same-origin-only — the control panel calls
             # them from its own page on this server, so no CORS header is needed — except
             # the one POST route the overlay itself calls (over-end AI commentary), which
@@ -7567,7 +7573,34 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Access-Control-Allow-Origin","*")
             self.end_headers()
             self.wfile.write(body)
-        except (BrokenPipeError, ConnectionResetError): pass
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError): pass
+
+    def _send_304(self, etag=None):
+        """HTTP 304 Not Modified conditional response for fan caching (Stage 5)."""
+        try:
+            self.send_response(304)
+            self._security_headers()
+            if etag:
+                self.send_header("ETag", etag)
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass
+
+    def _json_cached(self, data, status=200):
+        """HTTP conditional caching wrapper: emits ETag and returns 304 if unchanged."""
+        try:
+            body = json.dumps(data, sort_keys=True).encode("utf-8")
+            etag = f'"{hashlib.md5(body).hexdigest()}"'
+            req_etag = self.headers.get("If-None-Match") if hasattr(self, "headers") and self.headers else None
+            if req_etag and req_etag.strip() == etag and status == 200:
+                self._send_304(etag=etag)
+                return
+            extra_headers = {"ETag": etag, "Cache-Control": "no-cache"}
+            self._json(data, status=status, extra_headers=extra_headers)
+        except Exception:
+            self._json(data, status=status)
 
     def _html(self, html):
         try:
@@ -7590,7 +7623,7 @@ class Handler(BaseHTTPRequestHandler):
                 "connect-src 'self'; frame-ancestors 'none'")
             self.end_headers()
             self.wfile.write(body)
-        except (BrokenPipeError, ConnectionResetError): pass
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError): pass
 
     def _bytes(self, body, mime):
         try:
@@ -7600,7 +7633,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(body)
-        except (BrokenPipeError, ConnectionResetError): pass
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError): pass
 
     def _file(self, path, mime, no_cache=False):
         try:
@@ -7719,6 +7752,339 @@ class Handler(BaseHTTPRequestHandler):
             _auth_log_add("login_fail", ip)
             self._json({"ok": False, "error": "Wrong password"}, status=401)
 
+    def _handle_fan_ask(self, body, length):
+        """POST /fan/ask — Public endpoint for fan natural-language questions."""
+        FAN_ASK_MAX_BYTES = 16 * 1024  # 16 KB
+        if length > FAN_ASK_MAX_BYTES or len(body) > FAN_ASK_MAX_BYTES:
+            self._json({"ok": False, "error": "Request body exceeds maximum size of 16 KB", "code": "PAYLOAD_TOO_LARGE"}, status=413, no_cache=True)
+            return
+
+        ct = self.headers.get("Content-Type", "")
+        if not ct.lower().startswith("application/json"):
+            self._json({"ok": False, "error": "Content-Type must be application/json", "code": "INVALID_CONTENT_TYPE"}, status=400, no_cache=True)
+            return
+
+        if not body:
+            self._json({"ok": False, "error": "Request body cannot be empty", "code": "EMPTY_BODY"}, status=400, no_cache=True)
+            return
+
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except Exception:
+            self._json({"ok": False, "error": "Malformed JSON in request body", "code": "INVALID_JSON"}, status=400, no_cache=True)
+            return
+
+        if not isinstance(payload, dict):
+            self._json({"ok": False, "error": "JSON payload must be an object", "code": "INVALID_PAYLOAD"}, status=400, no_cache=True)
+            return
+
+        # 1. Question validation
+        if "question" not in payload:
+            self._json({"ok": False, "error": "Missing 'question' field", "code": "MISSING_QUESTION"}, status=400, no_cache=True)
+            return
+
+        question = payload.get("question")
+        if not isinstance(question, str):
+            self._json({"ok": False, "error": "'question' must be a string", "code": "INVALID_QUESTION"}, status=400, no_cache=True)
+            return
+
+        clean_question = question.strip()
+        if not clean_question:
+            self._json({"ok": False, "error": "'question' cannot be empty or whitespace", "code": "EMPTY_QUESTION"}, status=400, no_cache=True)
+            return
+
+        if len(clean_question) > 250:
+            self._json({"ok": False, "error": "Question exceeds maximum length of 250 characters", "code": "QUESTION_TOO_LONG"}, status=400, no_cache=True)
+            return
+
+        # 2. Innings validation (must be integer 1 or 2, reject boolean)
+        innings = payload.get("innings")
+        if innings is not None:
+            if isinstance(innings, bool) or not isinstance(innings, int) or innings not in (1, 2):
+                self._json({"ok": False, "error": "'innings' must be integer 1 or 2", "code": "INVALID_INNINGS"}, status=400, no_cache=True)
+                return
+
+        # 3. Match ID validation
+        match_id = payload.get("match_id")
+        if match_id is not None:
+            if not isinstance(match_id, str):
+                self._json({"ok": False, "error": "'match_id' must be a string", "code": "INVALID_MATCH_ID"}, status=400, no_cache=True)
+                return
+            active_mid = current_match_id()
+            if match_id.strip() != active_mid:
+                self._json({"ok": False, "error": f"Match ID '{match_id}' is not the currently active match", "code": "MATCH_MISMATCH"}, status=400, no_cache=True)
+                return
+
+        # 4. Conversation history validation
+        history = payload.get("conversation_history")
+        if history is not None:
+            if not isinstance(history, list):
+                self._json({"ok": False, "error": "'conversation_history' must be a list", "code": "INVALID_HISTORY"}, status=400, no_cache=True)
+                return
+            if len(history) > 8:
+                self._json({"ok": False, "error": "'conversation_history' cannot exceed 8 messages", "code": "HISTORY_TOO_LONG"}, status=400, no_cache=True)
+                return
+            for idx, msg in enumerate(history):
+                if not isinstance(msg, dict):
+                    self._json({"ok": False, "error": f"History item {idx} must be an object", "code": "INVALID_HISTORY_ITEM"}, status=400, no_cache=True)
+                    return
+                role = msg.get("role")
+                content = msg.get("content")
+                if role not in ("user", "assistant"):
+                    self._json({"ok": False, "error": f"History item {idx} role must be 'user' or 'assistant'", "code": "INVALID_HISTORY_ROLE"}, status=400, no_cache=True)
+                    return
+                if not isinstance(content, str) or not content.strip():
+                    self._json({"ok": False, "error": f"History item {idx} content must be non-empty string", "code": "INVALID_HISTORY_CONTENT"}, status=400, no_cache=True)
+                    return
+                if len(content.strip()) > 250:
+                    self._json({"ok": False, "error": f"History item {idx} content exceeds 250 characters", "code": "HISTORY_CONTENT_TOO_LONG"}, status=400, no_cache=True)
+                    return
+
+        # 5. Language validation (optional string)
+        language = payload.get("language", "en")
+        if language is not None and not isinstance(language, str):
+            self._json({"ok": False, "error": "'language' must be a string", "code": "INVALID_LANGUAGE"}, status=400, no_cache=True)
+            return
+        if language and len(language) > 10:
+            language = language[:10]
+
+        # Delay validation (optional integer seconds: 0, 15, 30, 60, 120)
+        delay = payload.get("delay", 0)
+        if not isinstance(delay, int) or delay < 0:
+            delay = 0
+        if delay > 300:
+            delay = 300
+
+        # 6. Client IP determination for rate limiting
+        st = load_state()
+        trusted_proxies = st.get("trusted_proxies", [])
+        sock_ip = self.client_address[0] if hasattr(self, "client_address") and self.client_address else "127.0.0.1"
+        client_ip = sock_ip
+        if sock_ip in ("127.0.0.1", "::1") and sock_ip in trusted_proxies:
+            xff = self.headers.get("X-Forwarded-For", "")
+            if xff:
+                client_ip = xff.split(",")[0].strip()
+
+        # 7. Delegate to fan_qa.handle_question
+        try:
+            import fan_qa
+            res = fan_qa.handle_question(
+                question=clean_question,
+                client_ip=client_ip,
+                match_id=match_id,
+                innings=innings,
+                conversation_history=history,
+                language=language or "en",
+                delay_sec=delay,
+            )
+
+            if res.get("ok"):
+                out = {
+                    "ok": True,
+                    "question": clean_question,
+                    "answer": res.get("answer"),
+                    "source": res.get("source", "deterministic"),
+                    "match_status": res.get("match_status", "live"),
+                    "innings": res.get("innings", 1),
+                    "data_freshness_sec": res.get("data_age_sec", 0),
+                    "is_stale": res.get("is_stale", False),
+                    "suggested_questions": res.get("suggested_questions", [])
+                }
+                self._json(out, status=200, no_cache=True)
+                return
+
+            code = res.get("code")
+            if code in ("RATE_LIMITED", "CONCURRENCY_LIMIT_EXCEEDED"):
+                retry_sec = res.get("retry_after_sec", 2)
+                extra = {"Retry-After": str(int(retry_sec) if int(retry_sec) > 0 else 1)}
+                self._json({
+                    "ok": False,
+                    "error": res.get("error"),
+                    "code": code,
+                    "retry_after_sec": retry_sec
+                }, status=429, no_cache=True, extra_headers=extra)
+                return
+
+            if code in ("AI_TIMEOUT", "API_KEY_MISSING", "AI_ERROR", "IMPORT_ERROR"):
+                self._json({
+                    "ok": False,
+                    "error": res.get("error", "AI assistant unavailable."),
+                    "code": "SERVICE_UNAVAILABLE",
+                    "suggested_questions": res.get("suggested_questions", [])
+                }, status=503, no_cache=True)
+                return
+
+            if code in ("INVALID_QUESTION", "QUESTION_TOO_LONG", "MATCH_MISMATCH"):
+                self._json({
+                    "ok": False,
+                    "error": res.get("error"),
+                    "code": code
+                }, status=400, no_cache=True)
+                return
+
+            self._json({
+                "ok": False,
+                "error": "An internal error occurred while processing the question.",
+                "code": "INTERNAL_ERROR"
+            }, status=500, no_cache=True)
+
+        except Exception:
+            self._json({
+                "ok": False,
+                "error": "An internal error occurred while processing the question.",
+                "code": "INTERNAL_ERROR"
+            }, status=500, no_cache=True)
+
+    def _handle_fan_glossary(self):
+        """GET /fan/glossary — Public read-only cricket glossary & explainer endpoint."""
+        import cricket_glossary
+        import fan_engine
+
+        try:
+            parsed = urlparse(self.path)
+            qs_dict = parse_qs(parsed.query, keep_blank_values=True)
+
+            # 1. Check for ambiguous duplicate query parameters
+            for k, v in qs_dict.items():
+                if len(v) > 1:
+                    self._json({
+                        "ok": False,
+                        "error": f"Ambiguous parameter: duplicate values provided for '{k}'",
+                        "code": "DUPLICATE_PARAMETER"
+                    }, status=400, no_cache=True)
+                    return
+
+            # Flatten single values
+            params = {k: v[0] for k, v in qs_dict.items()}
+
+            # 2. Language validation
+            lang = params.get("lang", "en").strip().lower()
+            if not lang:
+                lang = "en"
+            if lang not in cricket_glossary.SUPPORTED_LANGUAGES:
+                self._json({
+                    "ok": False,
+                    "error": f"Invalid language '{params.get('lang')}'. Supported languages are: {', '.join(cricket_glossary.SUPPORTED_LANGUAGES)}.",
+                    "code": "INVALID_LANGUAGE"
+                }, status=400, no_cache=True)
+                return
+
+            # 3. Category validation
+            category = params.get("category")
+            if category is not None:
+                category = category.strip().lower()
+                if category and category not in cricket_glossary.CATEGORIES:
+                    self._json({
+                        "ok": False,
+                        "error": f"Invalid category '{params.get('category')}'. Valid categories are: {', '.join(sorted(cricket_glossary.CATEGORIES.keys()))}.",
+                        "code": "INVALID_CATEGORY"
+                    }, status=400, no_cache=True)
+                    return
+                if not category:
+                    category = None
+
+            # 4. Search query validation
+            query = params.get("q")
+            if query is not None:
+                query = query.strip()
+                if len(query) > 100:
+                    self._json({
+                        "ok": False,
+                        "error": "Search query exceeds maximum length of 100 characters.",
+                        "code": "QUERY_TOO_LONG"
+                    }, status=400, no_cache=True)
+                    return
+                if not query:
+                    query = None
+
+            # 5. Specific term retrieval
+            term_id = params.get("term")
+            if term_id is not None:
+                clean_term = term_id.strip().lower()
+                if not clean_term or clean_term not in cricket_glossary.GLOSSARY_TERMS:
+                    self._json({
+                        "ok": False,
+                        "error": f"Glossary term '{term_id}' not found.",
+                        "code": "TERM_NOT_FOUND"
+                    }, status=404, no_cache=True)
+                    return
+
+                term_data = cricket_glossary.get_term(clean_term, lang=lang)
+
+                # Build context example using verified server-side match state
+                context_example = None
+                try:
+                    fan_data = fan_engine.get_fan_data()
+                    if fan_data and isinstance(fan_data, dict):
+                        match_facts = {
+                            "status": fan_data.get("status"),
+                            "innings": fan_data.get("innings", 1),
+                            "batting_team": fan_data.get("batting_team"),
+                            "bowling_team": fan_data.get("bowling_team"),
+                            "score": fan_data.get("score"),
+                            "wickets": fan_data.get("wickets"),
+                            "overs": fan_data.get("overs"),
+                            "run_rate": fan_data.get("run_rate"),
+                            "target": fan_data.get("target"),
+                            "runs_required": fan_data.get("runs_required"),
+                            "balls_remaining": fan_data.get("balls_remaining"),
+                            "required_run_rate": fan_data.get("required_run_rate"),
+                            "batters": fan_data.get("batters", []),
+                            "bowler": fan_data.get("bowler"),
+                            "partnership": fan_data.get("partnership"),
+                            "is_stale": (not fan_data.get("feed_fresh", True)) or ((fan_data.get("last_updated_sec_ago") or 0) > 30),
+                            "data_age_sec": fan_data.get("last_updated_sec_ago") or 0,
+                        }
+                        context_example = cricket_glossary.build_term_context(clean_term, match_facts, lang=lang)
+                except Exception:
+                    context_example = None
+
+                out = {
+                    "ok": True,
+                    "term": term_data,
+                    "context_example": context_example,
+                    "lang": lang,
+                }
+                self._json(out, status=200, no_cache=True)
+                return
+
+            # 6. Listing / Search / Filter retrieval
+            if query and category:
+                matching_terms = cricket_glossary.search_terms(query, lang=lang)
+                terms = [t for t in matching_terms if t.get("category") == category]
+            elif query:
+                terms = cricket_glossary.search_terms(query, lang=lang)
+            elif category:
+                terms = cricket_glossary.get_terms_by_category(category, lang=lang)
+            else:
+                terms = cricket_glossary.get_all_terms(lang=lang)
+
+            # Localized categories metadata list
+            cat_meta = []
+            for c_id, c_names in cricket_glossary.CATEGORIES.items():
+                cat_meta.append({
+                    "id": c_id,
+                    "name": c_names.get(lang) or c_names.get("en", c_id.title())
+                })
+
+            out = {
+                "ok": True,
+                "total": len(terms),
+                "lang": lang,
+                "category": category,
+                "query": query,
+                "categories": cat_meta,
+                "terms": terms,
+            }
+            self._json(out, status=200, no_cache=True)
+
+        except Exception as e:
+            self._json({
+                "ok": False,
+                "error": "An internal error occurred while processing the glossary request.",
+                "code": "INTERNAL_ERROR"
+            }, status=500, no_cache=True)
+
     def _check_rate_limit(self, path, key=None):
         """Returns True if the call is allowed; sends 429 and returns False if in cooldown.
         key splits one path's cooldown (e.g. report vs social post: separate buttons, so
@@ -7746,6 +8112,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        from urllib.parse import parse_qs
         path = urlparse(self.path).path
         if path in ("/","/overlay"):
             self._file(os.path.join(os.path.dirname(os.path.abspath(__file__)),"overlay.html"),"text/html; charset=utf-8", no_cache=True)
@@ -7771,6 +8138,46 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": False,
                             "error": f"scoring.html not found next to server.py ({e})"},
                            status=500)
+        elif path == "/fan":
+            # Mobile-first Fan Companion dashboard
+            try:
+                with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                       "fan.html"), encoding="utf-8") as f:
+                    self._html(f.read())
+            except OSError as e:
+                self._json({"ok": False,
+                            "error": f"fan.html not found next to server.py ({e})"},
+                           status=500)
+        elif path == "/fan/data":
+            # Safe read-only live match state for fan companion with ETag and Spoiler Delay
+            import fan_engine
+            parsed = urlparse(self.path)
+            qs = parse_qs(parsed.query, keep_blank_values=True)
+            delay = 0
+            try:
+                delay = max(0, int(qs.get("delay", [0])[0]))
+            except Exception:
+                delay = 0
+            self._json_cached(fan_engine.get_fan_data(delay_sec=delay))
+        elif path == "/fan/timeline":
+            # Ball-by-ball timeline API for fan companion with ETag and Spoiler Delay
+            import fan_engine
+            parsed = urlparse(self.path)
+            qs = parse_qs(parsed.query, keep_blank_values=True)
+            res = fan_engine.get_fan_timeline(qs)
+            status_code = 200 if res.get("ok", False) else 400
+            self._json_cached(res, status=status_code)
+        elif path == "/fan/commentary":
+            # Live commentary API for fan companion with ETag and Spoiler Delay
+            import fan_commentary
+            parsed = urlparse(self.path)
+            qs = parse_qs(parsed.query, keep_blank_values=True)
+            res = fan_commentary.get_fan_commentary(qs)
+            status_code = 200 if res.get("ok", False) else 400
+            self._json_cached(res, status=status_code)
+        elif path == "/fan/glossary":
+            # Public read-only cricket glossary & explainer API (Cricket Explainer Stage 2)
+            self._handle_fan_glossary()
         elif path == "/scoring/state":
             # Read-only view for the scoring page (no secrets — open, like /live/view)
             self._json(manual_ui_state())
@@ -8794,6 +9201,10 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_login(body)
             return
 
+        if path == "/fan/ask":
+            self._handle_fan_ask(body, length)
+            return
+
         # These are fired automatically by the overlay itself — a loopback OBS browser
         # source with no login flow of its own. /commentary/over/generate additionally
         # spends Anthropic credit, so all of them trust loopback callers with no forwarding
@@ -9342,8 +9753,15 @@ if __name__ == "__main__":
 
     httpd = _Server((_BIND_HOST, PORT), Handler)
     try:
+        import fan_engine
+        fan_engine.start_fan_timeline_worker()
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\n  Server stopped.")
     finally:
+        try:
+            import fan_engine
+            fan_engine.stop_fan_timeline_worker()
+        except Exception:
+            pass
         _stop_cloudflare_tunnel()

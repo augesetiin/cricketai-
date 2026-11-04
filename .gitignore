@@ -6,6 +6,8 @@
 config.ini*
 match_state.json*
 match_data.db*
+.env*
+!.env.example
 __pycache__/
 *.pyc
 *.log
