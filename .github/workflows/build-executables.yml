@@ -76,7 +76,7 @@ jobs:
           # (the macOS job's `|| true` is the same fix).
           exit 0
 
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: CricketStream-windows
           path: dist/CricketStream.exe
@@ -138,7 +138,7 @@ jobs:
           chmod +x "CricketStream.command" CricketStream
           zip CricketStream-mac.zip CricketStream "CricketStream.command"
 
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: CricketStream-mac
           path: dist/CricketStream-mac.zip
@@ -195,7 +195,7 @@ jobs:
             exit 1
           }
 
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: CricketStreamScorerAgent-windows
           path: dist/CricketStreamScorerAgent.exe
