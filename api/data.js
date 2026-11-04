@@ -51,3 +51,4 @@ export default function handler(req, res) {
     last_updated_sec_ago: 0
   });
 }
+
