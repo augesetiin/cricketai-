@@ -137,7 +137,7 @@ def _load_auth_config():
         cfg.read(cfg_path, encoding="utf-8")
         _CONTROL_TOKEN     = cfg.get("Auth",    "control_token", fallback="").strip()
         _CLUB_PASSWORD     = cfg.get("Auth",    "club_password", fallback="").strip()
-        _BIND_HOST         = (os.environ.get("BBCC_BIND_HOST","").strip()
+        _BIND_HOST         = (os.environ.get("CRICKETSTREAM_BIND_HOST", "").strip()
                               or cfg.get("Network", "bind_host", fallback="127.0.0.1").strip())
         _CLOUDFLARE_TUNNEL = cfg.getboolean("Network", "cloudflare_tunnel", fallback=False)
 
@@ -3166,7 +3166,7 @@ _league_table_lock = threading.Lock()
 
 def fetch_league_table(force=False):
     """Fetch today's competition's league table from PlayCricket, cached once per day per
-    competition_id. Returns the module-level _league_table dict. Verified against BBCC's
+    competition_id. Returns the module-level _league_table dict. Verified against
     real Division 1 table on 2026-09-19 — see TODO.md for the competition_id vs
     division_id naming note (PlayCricket's own docs call the parameter division_id; in
     practice it accepts the same numeric ID matches.json calls competition_id).
@@ -3235,7 +3235,7 @@ def league_table_home_row(table=None):
     WRONG table (verified in testing: an unrelated competition_id returned a different
     real league's table, not an error) — the only reliable check is whether the home
     club's own name appears in it. Matches on the club name's first significant word
-    (e.g. 'Bridestowe' out of 'Bridestowe and Belstone CC'), same spirit as the
+    (e.g. 'Super' out of 'Super Kings CC'), same spirit as the
     opposition-abbreviation logic in fetch_todays_match(), since PlayCricket's league-table
     team names don't exactly match the state's home_team spelling."""
     table = table or _league_table
@@ -3546,7 +3546,7 @@ def _pc_recent_matches(api_key, site_id, season, cfg, limit=12):
     return rows[:limit]
 
 def _card_name(name):
-    """'Bridestowe and Belstone CC' -> 'Bridestowe & Belstone CC' — shorter on the card."""
+    """'Royal Challengers and Kings CC' -> 'Royal Challengers & Kings CC' — shorter on the card."""
     return re.sub(r"\s+and\s+", " & ", (name or "").strip(), flags=re.I)
 
 
@@ -6475,16 +6475,7 @@ def _installed_version():
 def _pc_update(st):
     have = _installed_version()
     if not have:
-        return ("skip", "Couldn't tell which version this is.", "")
-    req = urllib.request.Request(
-        "https://api.github.com/repos/BridestoweBelstoneCC/Cricket-Live-Stream/releases/latest",
-        headers={"User-Agent": "CricketStream-precheck"})
-    with urllib.request.urlopen(req, timeout=8) as r:
-        latest = json.loads(r.read().decode()).get("tag_name", "").lstrip("v")
-    as_tuple = lambda v: tuple(int(x) for x in re.findall(r"\d+", v))
-    if latest and as_tuple(latest) > as_tuple(have):
-        return ("warn", f"Version {latest} is out — this laptop has {have}.",
-                "Download it from the GitHub Releases page (or git pull).")
+        return ("skip", "Version check not configured.", "")
     return ("ok", f"Up to date (v{have}).", "")
 
 

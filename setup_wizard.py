@@ -524,7 +524,7 @@ def check_location():
         "",
         "That folder is the one you unzipped — if you haven't downloaded the",
         "project yet, get it from:",
-        "  https://github.com/BridestoweBelstoneCC/Cricket-Live-Stream",
+        "  https://github.com/augesetiin/CricketStream-Fan-Companion",
         "(green 'Code' button -> Download ZIP, then unzip it somewhere",
         " permanent like Documents\\CricketStream, and put this file inside.)")
 
@@ -615,7 +615,7 @@ if __name__ == "__main__":
         traceback.print_exc(file=sys.stdout)
         print()
         print("   Please report this at:")
-        print("   https://github.com/BridestoweBelstoneCC/Cricket-Live-Stream/issues")
+        print("   https://github.com/augesetiin/CricketStream-Fan-Companion/issues")
         print("   Copy the lines above into the issue (they say what broke).")
         pause()
         sys.exit(1)

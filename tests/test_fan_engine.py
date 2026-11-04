@@ -51,8 +51,8 @@ class TestFanEngine(unittest.TestCase):
 
     def test_live_first_innings(self):
         live_state = {
-            "battingTeamName": "Bridestowe CC",
-            "bowlingTeamName": "Belstone CC",
+            "battingTeamName": "Home CC",
+            "bowlingTeamName": "Away CC",
             "innings": 1,
             "score": 115,
             "wickets": 2,
@@ -95,8 +95,8 @@ class TestFanEngine(unittest.TestCase):
         self.assertEqual(data["status"], "live")
         self.assertEqual(data["status_display"], "LIVE")
         self.assertIsNone(data["result_text"])
-        self.assertEqual(data["batting_team"], "Bridestowe CC")
-        self.assertEqual(data["bowling_team"], "Belstone CC")
+        self.assertEqual(data["batting_team"], "Home CC")
+        self.assertEqual(data["bowling_team"], "Away CC")
         self.assertEqual(data["score"], 115)
         self.assertEqual(data["wickets"], 2)
         self.assertEqual(data["overs"], "15.3")
@@ -132,8 +132,8 @@ class TestFanEngine(unittest.TestCase):
 
     def test_innings_one_all_out(self):
         live_state = {
-            "battingTeamName": "Bridestowe CC",
-            "bowlingTeamName": "Belstone CC",
+            "battingTeamName": "Home CC",
+            "bowlingTeamName": "Away CC",
             "innings": 1,
             "score": 145,
             "wickets": 10,
@@ -144,13 +144,13 @@ class TestFanEngine(unittest.TestCase):
         self.assertEqual(data["status"], "innings_break")
         self.assertEqual(data["status_display"], "INNINGS BREAK")
         self.assertEqual(data["target"], 146)
-        self.assertIn("Innings 1 complete: Bridestowe CC set a target of 146", data["result_text"])
+        self.assertIn("Innings 1 complete: Home CC set a target of 146", data["result_text"])
         self.assertIsNone(data["required_run_rate"])
 
     def test_innings_one_overs_limit_reached(self):
         live_state = {
-            "battingTeamName": "Bridestowe CC",
-            "bowlingTeamName": "Belstone CC",
+            "battingTeamName": "Home CC",
+            "bowlingTeamName": "Away CC",
             "innings": 1,
             "score": 189,
             "wickets": 5,
@@ -165,8 +165,8 @@ class TestFanEngine(unittest.TestCase):
 
     def test_live_second_innings_chase(self):
         live_state = {
-            "battingTeamName": "Belstone CC",
-            "bowlingTeamName": "Bridestowe CC",
+            "battingTeamName": "Away CC",
+            "bowlingTeamName": "Home CC",
             "innings": 2,
             "score": 140,
             "wickets": 4,
@@ -281,8 +281,8 @@ class TestFanEngine(unittest.TestCase):
     def test_configured_overs_limit_not_hardcoded_twenty(self):
         # 50-over match: 35.0 overs bowled, 90 balls remaining, max_overs 50
         live_state = {
-            "battingTeamName": "Belstone CC",
-            "bowlingTeamName": "Bridestowe CC",
+            "battingTeamName": "Away CC",
+            "bowlingTeamName": "Home CC",
             "innings": 2,
             "score": 180,
             "wickets": 4,

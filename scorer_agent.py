@@ -707,6 +707,6 @@ if __name__ == "__main__":
         print("   falls back to whatever other source it has configured.")
         print()
         print("   Please report this at:")
-        print("   https://github.com/BridestoweBelstoneCC/Cricket-Live-Stream/issues")
+        print("   https://github.com/augesetiin/CricketStream-Fan-Companion/issues")
         pause()
         sys.exit(1)

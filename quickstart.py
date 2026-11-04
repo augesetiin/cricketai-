@@ -93,7 +93,7 @@ def die(title, *lines):
     pause()
     sys.exit(1)
 
-GITHUB_REPO = "BridestoweBelstoneCC/Cricket-Live-Stream"
+GITHUB_REPO = "augesetiin/CricketStream-Fan-Companion"
 
 # server.py's serve_forever() never returns during normal operation, so proc.wait() only
 # ever returns here because the server crashed (unhandled exception, OOM, anything) --
@@ -546,7 +546,7 @@ def main():
             "moved out.",
             "",
             "TO FIX: re-download/unzip the project and keep the folder intact.",
-            "  https://github.com/BridestoweBelstoneCC/Cricket-Live-Stream")
+            "  https://github.com/augesetiin/CricketStream-Fan-Companion")
 
     # NOTE: no "import subprocess" here. subprocess is imported at module level, and a
     # function-local import of the same name makes it local for the ENTIRE function --
@@ -796,7 +796,7 @@ def run_server_with_restarts(proc, launch, token="", max_restarts=SERVER_MAX_RES
                     "  - Packages missing or half-installed — re-run setup",
                     "",
                     "If it isn't obvious, please open an issue with those lines:",
-                    "  https://github.com/BridestoweBelstoneCC/Cricket-Live-Stream/issues")
+                    "  https://github.com/augesetiin/CricketStream-Fan-Companion/issues")
             server_restarts += 1
             log(f"Server stopped unexpectedly — restarting "
                 f"(attempt {server_restarts}/{max_restarts})", "warn")
@@ -924,7 +924,7 @@ if __name__ == "__main__":
         traceback.print_exc(file=sys.stdout)
         print()
         print("   Please report this at:")
-        print("   https://github.com/BridestoweBelstoneCC/Cricket-Live-Stream/issues")
+        print("   https://github.com/augesetiin/CricketStream-Fan-Companion/issues")
         print("   Copy the lines above into the issue (they say what broke).")
         pause()
         sys.exit(1)

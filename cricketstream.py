@@ -166,7 +166,7 @@ def main():
                 "",
                 "Part of the project folder seems to be missing. Re-download and",
                 "unzip it, keeping the folder intact:",
-                "  https://github.com/BridestoweBelstoneCC/Cricket-Live-Stream")
+                "  https://github.com/augesetiin/CricketStream-Fan-Companion")
     print("\n  Starting the match...\n")
     # quickstart writes straight to the same console. Without this flush our own status
     # lines sit in a buffer and appear AFTER its banner (or not at all), which makes the
@@ -210,7 +210,7 @@ if __name__ == "__main__":
         traceback.print_exc(file=sys.stdout)
         print()
         print("   Please report this at:")
-        print("   https://github.com/BridestoweBelstoneCC/Cricket-Live-Stream/issues")
+        print("   https://github.com/augesetiin/CricketStream-Fan-Companion/issues")
         print("   Copy the lines above into the issue (they say what broke).")
         wiz.pause()
         sys.exit(1)
