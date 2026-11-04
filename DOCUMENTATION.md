@@ -234,6 +234,3 @@ This solution is built specifically for the challenge:
    * Pure reactive frontend with zero third-party UI framework bloat.
    * State management supporting instantaneous switching between the 6 fan perspectives with zero page reloads.
 
-5. **Open Source Base:**
-   * Built on top of the open-source CricketStream streaming layer under GPLv3. All original license terms and disclaimers are preserved in the repository.
-
